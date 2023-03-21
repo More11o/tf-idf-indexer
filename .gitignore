@@ -1,0 +1,5 @@
+/target
+gldocs
+.cargo
+index.json
+.DS_Store
