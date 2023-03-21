@@ -1,5 +1,5 @@
 use std::{
-    fs::{self, File, DirEntry},
+    fs::{self, File},
     io::{ BufReader, BufWriter, Result },
     path::{Path, PathBuf},
     collections::HashMap,
@@ -14,7 +14,7 @@ pub mod lexer;
 use lexer::Lexer;
 
 type TermFreq = HashMap::<String, usize>;
-type TermFreqIndex = HashMap<PathBuf, TermFreq>;
+type TermFreqIndex = HashMap::<PathBuf, TermFreq>;
 
 ///
 /// Creates an JSON file using containing the TermFrequencys of all files in a given path.
@@ -28,18 +28,36 @@ pub fn create_index(dir_path: &str, filename: &str) -> std::io::Result<()>{
 
     print!("Indexing {dir_path} ... ");
 
-    for entry in fs::read_dir(&path)? {
-        let entry = entry?;
-        
-        let tf = index_document(&entry)?;
+    let dir_tree = build_dir_tree(path); 
 
-        tf_index.insert(entry.path(), tf); 
+    for entry in dir_tree {
+        if entry.extension().unwrap() == "xhtml" {
+            let tf = index_document(&entry)?;
 
+            tf_index.insert(entry, tf); 
+        }
     };
     
     index_to_json(filename, &tf_index)?;
 
     Ok(())
+}
+
+pub fn build_dir_tree(dir_path: &Path) -> Vec<PathBuf>{
+    let mut results: Vec<PathBuf> = Vec::new();
+
+    for entry in fs::read_dir(dir_path).unwrap() {
+        let entry = entry.unwrap();
+        if entry.path().is_file() {
+            results.push(entry.path());
+        }
+        if entry.path().is_dir() {
+            let mut t = build_dir_tree(entry.path().as_path());
+            results.append(&mut t);
+        }
+    }
+
+    results
 }
 
 pub fn serve(index_filename: &str) {
@@ -57,9 +75,9 @@ fn load_index_file(filename: &str) -> TermFreqIndex {
 
 
 
-fn index_document (entry: &DirEntry) -> Result<TermFreq> {
-    print!("Indexing {:?} ... ", entry.path());
-    let content = read_file(entry.path())?
+fn index_document (entry: &PathBuf) -> Result<TermFreq> {
+    print!("Indexing {:?} ... ", entry);
+    let content = read_file(entry)?
         .chars()
         .collect::<Vec<_>>();
 
