@@ -49,7 +49,7 @@ pub fn create_index(dir_path: &str, filename: &str) -> std::io::Result<()>{
     drop(tx);
     
     for received in rx {
-        tf_index.insert(received.0, received.1);
+        tf_index.entry(received.0).or_insert(received.1);
     };
     
     index_to_json(filename, &tf_index)?;
