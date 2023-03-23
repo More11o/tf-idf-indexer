@@ -75,7 +75,8 @@ pub fn build_dir_tree(dir_path: &Path) -> Vec<PathBuf>{
 }
 
 pub fn serve(index_filename: &str) {
-    let _ = load_index_file(index_filename);
+    let tfi = load_index_file(index_filename);
+    println!("TFI contains {:?} files", tfi.len());
     todo!()
 }
 
