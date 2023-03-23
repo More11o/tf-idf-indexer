@@ -3,6 +3,8 @@ use std::{
     io::{ BufReader, BufWriter, Result },
     path::{Path, PathBuf},
     collections::HashMap,
+    thread,
+    sync::mpsc
 };
 
 use xml::reader::{
@@ -22,20 +24,32 @@ type TermFreqIndex = HashMap::<PathBuf, TermFreq>;
 /// create-index("test", "~/my_files")
 /// 
 pub fn create_index(dir_path: &str, filename: &str) -> std::io::Result<()>{
-    let mut tf_index = TermFreqIndex::new();
 
+    let mut tf_index = TermFreqIndex::new();
     let path = Path::new(dir_path);
+    let dir_tree = build_dir_tree(path); 
+
+    let (tx, rx) = mpsc::channel();
 
     print!("Indexing {dir_path} ... ");
 
-    let dir_tree = build_dir_tree(path); 
-
     for entry in dir_tree {
         if entry.extension().unwrap() == "xhtml" {
-            let tf = index_document(&entry)?;
+            // tx requires cloning so that the thread can take ownership.
+            let tx = tx.clone();
+            thread::spawn(move || {
+                let tf = index_document(&entry).unwrap();
+                let r = (entry, tf);
+                tx.send(r).unwrap();
+            });
+        } 
+    };
 
-            tf_index.insert(entry, tf); 
-        }
+    // Dropping tx here means that when rx finishes it's loop it doesn't carry on waiting.
+    drop(tx);
+    
+    for received in rx {
+        tf_index.insert(received.0, received.1);
     };
     
     index_to_json(filename, &tf_index)?;
@@ -76,7 +90,7 @@ fn load_index_file(filename: &str) -> TermFreqIndex {
 
 
 fn index_document (entry: &PathBuf) -> Result<TermFreq> {
-    print!("Indexing {:?} ... ", entry);
+    //print!("Indexing {:?} ... ", entry);
     let content = read_file(entry)?
         .chars()
         .collect::<Vec<_>>();
@@ -89,7 +103,7 @@ fn index_document (entry: &PathBuf) -> Result<TermFreq> {
         *freq += 1
     };
 
-    println!("Complete");
+    //println!("Complete");
     Ok(tf)
 }
 
