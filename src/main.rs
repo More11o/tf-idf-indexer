@@ -12,7 +12,10 @@ fn main() {
 
     match args.len() {
         4 => if args[1] == "index" { tf_idf_indexer::create_index(&args[2], &args[3]).unwrap(); },
-        3 => if args[1] == "serve" { tf_idf_indexer::serve(&args[2]); },
+        3 => if args[1] == "serve" { 
+            tf_idf_indexer::serve(&args[2]).unwrap_or(println!("Unable to serve index file."));
+            process::exit(1);
+         },
         _ => {
             print_usage();
             process::exit(1);

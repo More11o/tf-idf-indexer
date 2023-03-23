@@ -27,7 +27,7 @@ pub fn create_index(dir_path: &str, filename: &str) -> std::io::Result<()>{
 
     let mut tf_index = TermFreqIndex::new();
     let path = Path::new(dir_path);
-    let dir_tree = build_dir_tree(path); 
+    let dir_tree = build_dir_tree(path)?; 
 
     let (tx, rx) = mpsc::channel();
 
@@ -38,7 +38,7 @@ pub fn create_index(dir_path: &str, filename: &str) -> std::io::Result<()>{
             // tx requires cloning so that the thread can take ownership.
             let tx = tx.clone();
             thread::spawn(move || {
-                let tf = index_document(&entry).unwrap();
+                let tf = index_document(&entry).unwrap_or(TermFreq::new());
                 let r = (entry, tf);
                 tx.send(r).unwrap();
             });
@@ -57,7 +57,7 @@ pub fn create_index(dir_path: &str, filename: &str) -> std::io::Result<()>{
     Ok(())
 }
 
-pub fn build_dir_tree(dir_path: &Path) -> Vec<PathBuf>{
+pub fn build_dir_tree(dir_path: &Path) -> Result<Vec<PathBuf>> {
     let mut results: Vec<PathBuf> = Vec::new();
 
     for entry in fs::read_dir(dir_path).unwrap() {
@@ -66,32 +66,30 @@ pub fn build_dir_tree(dir_path: &Path) -> Vec<PathBuf>{
             results.push(entry.path());
         }
         if entry.path().is_dir() {
-            let mut t = build_dir_tree(entry.path().as_path());
+            let mut t = build_dir_tree(entry.path().as_path())?;
             results.append(&mut t);
         }
     }
 
-    results
+    Ok(results)
 }
 
-pub fn serve(index_filename: &str) {
-    let tfi = load_index_file(index_filename);
+pub fn serve(index_filename: &str) -> Result<()>{
+    let tfi = load_index_file(index_filename)?;
     println!("TFI contains {:?} files", tfi.len());
     todo!()
 }
 
-fn load_index_file(filename: &str) -> TermFreqIndex {
-    let contents = json_to_index(filename).unwrap();
+fn load_index_file(filename: &str) -> Result<TermFreqIndex> {
+    let contents = json_to_index(filename)?;
 
-    contents
-
+    Ok(contents)
 }
 
 
 
 
 fn index_document (entry: &PathBuf) -> Result<TermFreq> {
-    //print!("Indexing {:?} ... ", entry);
     let content = read_file(entry)?
         .chars()
         .collect::<Vec<_>>();
@@ -104,12 +102,10 @@ fn index_document (entry: &PathBuf) -> Result<TermFreq> {
         *freq += 1
     };
 
-    //println!("Complete");
     Ok(tf)
 }
 
 fn read_file<P: AsRef<Path>>(filepath: P) -> Result<String>{
-    // todo: remove panic!() and exit function gracefully.
     // todo: investigate File::metadata to choose how to parse file 
     //  when new file formats are added.
     let file = File::open(filepath)?;
@@ -151,8 +147,6 @@ fn index_to_json(filename: &str, index: &TermFreqIndex) -> Result<()> {
     let file = fs::File::create(filename)?;
     let bw = BufWriter::new(file);
 
-    // serde::to_writer_pretty() is avaiable but the resulting file is
-    //  almost double the size.
     serde_json::to_writer(bw, index)?;
     println!("Complete!");
 
@@ -160,12 +154,10 @@ fn index_to_json(filename: &str, index: &TermFreqIndex) -> Result<()> {
 }
 
 fn json_to_index(filename: &str) -> Result<TermFreqIndex> {
-    print!("Reading index from: {filename} ... ");
     let file = File::open(filename)?;
     let br = BufReader::new(file);
 
     let tfi: TermFreqIndex = serde_json::from_reader(br)?;
-    println!("Complete!");
 
     Ok(tfi)
 }
