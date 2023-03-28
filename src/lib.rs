@@ -12,7 +12,7 @@ use xml::reader::{
     XmlEvent::Characters
 };
 
-pub mod lexer;
+mod lexer;
 use lexer::Lexer;
 
 type TermFreq = HashMap::<String, usize>;
@@ -39,13 +39,12 @@ pub fn create_index(dir_path: &str, filename: &str) -> std::io::Result<()>{
             let tx = tx.clone();
             thread::spawn(move || {
                 let tf = index_document(&entry).unwrap_or(TermFreq::new());
-                let r = (entry, tf);
-                tx.send(r).unwrap();
+                tx.send((entry, tf)).unwrap();
             });
         } 
     };
 
-    // Dropping tx here means that when rx finishes it's loop it doesn't carry on waiting.
+    // Drop tx to close the channel.
     drop(tx);
     
     for received in rx {
